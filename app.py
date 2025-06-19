@@ -14,8 +14,8 @@ def get_spy_prices():
     start = now - timedelta(days=5)
     data = yf.download("SPY", start=start, end=end, interval="1d")
     if len(data) >= 2:
-        cierre = round(data['Close'].iloc[-2] * 10, 2)
-        apertura = round(data['Open'].iloc[-1] * 10, 2)
+        cierre = float(round(data['Close'].iloc[-2] * 10, 2))
+        apertura = float(round(data['Open'].iloc[-1] * 10, 2))
         return cierre, apertura
     return None, None
 
@@ -107,5 +107,6 @@ with st.expander("🛡 Condiciones SL Trailing"):
 # ====================
 st.markdown("---")
 st.button("🔄 Forzar actualización de datos")
+
 
 
