@@ -29,9 +29,9 @@ spot_cierre, spot_apertura = get_spy_prices()
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    st.write(f"**📉 Spot cierre:** {'{:.2f}'.format(spot_cierre) if spot_cierre else 'N/D'}")
+    st.write(f"**📉 Spot cierre:** {'{:.2f}'.format(spot_cierre) if spot_cierre is not None else 'N/D'}")
 with col2:
-    st.write(f"**📈 Spot apertura:** {'{:.2f}'.format(spot_apertura) if spot_apertura else 'N/D'}")
+    st.write(f"**📈 Spot apertura:** {'{:.2f}'.format(spot_apertura) if spot_apertura is not None else 'N/D'}")
 with col3:
     futuro = st.number_input("📊 Futuro (ES1!)", value=5345.0, step=0.25)
 
@@ -107,4 +107,5 @@ with st.expander("🛡 Condiciones SL Trailing"):
 # ====================
 st.markdown("---")
 st.button("🔄 Forzar actualización de datos")
+
 
