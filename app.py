@@ -1,112 +1,89 @@
 import streamlit as st
 import yfinance as yf
-import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime
 
-st.set_page_config(page_title="Estrategia SP500", layout="wide")
+st.set_page_config(page_title="Entrada SP500", layout="centered")
 
-# ====================
-# FUNCIONES AUXILIARES
-# ====================
+# --- Funciones ---
 def get_spy_prices():
-    now = datetime.now()
-    end = now
-    start = now - timedelta(days=5)
-    data = yf.download("SPY", start=start, end=end, interval="1d")
-    if len(data) >= 2:
-        cierre = float(round(data['Close'].iloc[-2] * 10, 2))
-        apertura = float(round(data['Open'].iloc[-1] * 10, 2))
-        return cierre, apertura
-    return None, None
+    spy = yf.Ticker("SPY")
+    hist = spy.history(period="2d", interval="1d")
+    close_spot = round(hist['Close'][-2] * 10, 2)
+    open_spot = round(hist['Open'][-1] * 10, 2)
+    return close_spot, open_spot
 
-# ====================
-# DATOS INICIALES
-# ====================
-st.title("📈 Estrategia SP500 - Versión Web")
+def calcular_gap_divergencia(spot_cierre, spot_apertura, futuro):
+    gap = round(spot_apertura - spot_cierre, 2)
+    esperado = round(spot_cierre + gap, 2)
+    divergencia = round(futuro - esperado, 2)
+    return gap, divergencia
 
+# --- Simulamos valores de indicadores (reemplazar por datos reales si se automatiza) ---
+rsi = 61
+volumen = 2700
+cuerpo_vela = 1.85
+impulso = +2.2
+retroceso = -0.8
+puntos_entrada = 540.0
+ultimo_precio = 541.75
+diff_trailing = round(ultimo_precio - puntos_entrada, 2)
+
+# --- Estilos básicos ---
+def mostrar_valor(etiqueta, valor, color=None):
+    alineacion = f"<div style='text-align:right; color:{color};'>{valor}</div>" if color else f"<div style='text-align:right;'>{valor}</div>"
+    col1, col2 = st.columns([1,1])
+    with col1:
+        st.markdown(f"**{etiqueta}**")
+    with col2:
+        st.markdown(alineacion, unsafe_allow_html=True)
+
+# --- DATOS INICIALES ---
+st.markdown("## Datos Iniciales")
 spot_cierre, spot_apertura = get_spy_prices()
+futuro = st.number_input("Futuro (ES1!)", value=spot_apertura, step=0.25, label_visibility="collapsed")
 
-col1, col2, col3 = st.columns(3)
+gap, divergencia = calcular_gap_divergencia(spot_cierre, spot_apertura, futuro)
 
-with col1:
-    st.write(f"**📉 Spot cierre:** {'{:.2f}'.format(spot_cierre) if spot_cierre is not None else 'N/D'}")
-with col2:
-    st.write(f"**📈 Spot apertura:** {'{:.2f}'.format(spot_apertura) if spot_apertura is not None else 'N/D'}")
-with col3:
-    futuro = st.number_input("📊 Futuro (ES1!)", value=5345.0, step=0.25)
+# Colores para Gap y Divergencia
+gap_color = "green" if gap > 0 else "red"
+div_color = "green" if (gap > 0 and divergencia > 0) or (gap < 0 and divergencia < 0) else "red"
 
-# Gap y Divergencia
-gap = round((spot_apertura - spot_cierre) / spot_cierre * 100, 2) if spot_cierre and spot_apertura else 0
-divergencia = round((futuro - spot_apertura) / spot_apertura * 100, 2) if spot_apertura else 0
+mostrar_valor("Spot cierre", spot_cierre)
+mostrar_valor("Spot apertura", spot_apertura)
+mostrar_valor("Futuro (ES1!)", futuro)
+mostrar_valor("Gap Spot", f"{gap:+.2f}", gap_color)
+mostrar_valor("Divergencia", f"{divergencia:+.2f}", div_color)
 
-st.markdown("---")
-st.subheader("📊 Datos Iniciales")
+st.button("Recalcular")
 
-col4, col5, col6 = st.columns(3)
-with col4:
-    st.write(f"**📏 Gap:** {gap:.2f}%")
-with col5:
-    st.write(f"**📐 Divergencia:** {divergencia:.2f}%")
-with col6:
-    st.write("")
+# --- ENTRADA RECOMENDADA ---
+st.markdown("## Entrada recomendada")
 
-# ====================
-# ENTRADA RECOMENDADA
-# ====================
-st.markdown("---")
-st.subheader("📌 Entrada recomendada")
+if divergencia > 0:
+    st.markdown("<h3 style='color:green;'>↑ Entrada en largo</h3>", unsafe_allow_html=True)
+    mostrar_valor("TP", "+10.00", "red")
+    mostrar_valor("SL", "-5.00", "red")
+else:
+    st.markdown("<h3 style='color:red;'>↓ Entrada en corto</h3>", unsafe_allow_html=True)
+    mostrar_valor("TP", "-10.00", "green")
+    mostrar_valor("SL", "+5.00", "green")
 
-entrada = spot_apertura
-tp = round(entrada + 5.5, 2)
-sl = round(entrada - 3.5, 2)
+# --- VALIDACIÓN EN TENDENCIA ---
+with st.expander("Validación entrada en tendencia (1min)"):
+    mostrar_valor("RSI ≥ 55", f"({rsi})", "green" if rsi >= 55 else "red")
+    mostrar_valor("Volumen ≥ 2000", f"({volumen})", "green" if volumen >= 2000 else "red")
+    mostrar_valor("Cuerpo vela ≥ 1.25 pt", f"({cuerpo_vela})", "green" if cuerpo_vela >= 1.25 else "red")
 
-tipo = "LARGO" if divergencia >= 0 else "CORTO"
-color = "green" if tipo == "LARGO" else "red"
+# --- TP EXTENDIDO ---
+with st.expander("Condiciones TP extendido"):
+    mostrar_valor("Impulso ≥ 2 pt", f"({impulso})", "green" if impulso >= 2 else "red")
+    mostrar_valor("Retroceso ≤ -0.5 pt", f"({retroceso})", "green" if retroceso <= -0.5 else "red")
+    mostrar_valor("Volumen ≥ 2500", f"({volumen})", "green" if volumen >= 2500 else "red")
 
-st.markdown(f"**🔵 Tipo de entrada:** <span style='color:{color}'>{tipo}</span>", unsafe_allow_html=True)
-st.markdown(f"**🎯 Entrada:** <span style='color:{color}'>{entrada:.2f}</span>", unsafe_allow_html=True)
-st.markdown(f"**✅ TP:** <span style='color:{'red' if tipo == 'LARGO' else 'green'}'>{tp:.2f}</span>", unsafe_allow_html=True)
-st.markdown(f"**🛑 SL:** <span style='color:{'red' if tipo == 'LARGO' else 'green'}'>{sl:.2f}</span>", unsafe_allow_html=True)
+# --- SL TRAILING ---
+with st.expander("Condiciones SL Trailing"):
+    mostrar_valor("Diferencia desde entrada", f"{diff_trailing:+.2f}", "green" if diff_trailing > 0 else "red")
 
-# ====================
-# VALIDACIÓN TENDENCIA (1min)
-# ====================
-with st.expander("🔎 Validación entrada en tendencia (1min)"):
-    data_validacion = {
-        "Condición": ["RSI > 55", "Volumen ≥ 2000", "Cuerpo vela ≥ 1.25 pt", "Impulso ≥ 2.00 pt", "Retroceso ≤ -1.00 pt"],
-        "Valor límite": [55, 2000, 1.25, 2.00, -1.00],
-        "Valor actual": [61, 2700, 1.85, 2.10, -0.70]
-    }
-    df_val = pd.DataFrame(data_validacion)
-    st.dataframe(df_val, use_container_width=True)
-
-# ====================
-# TP EXTENDIDO
-# ====================
-with st.expander("🎯 Condiciones TP Extendido"):
-    df_tp_ext = pd.DataFrame({
-        "Condición": ["RSI > 60", "Volumen > 2500", "Cuerpo vela ≥ 1.25 pt", "Gap Spot ≥ 0.24%", "Divergencia ≥ 0.10%", "Impulso ≥ 2.00 pt", "Retroceso ≤ -1.00 pt"],
-        "Valor límite": [60, 2500, 1.25, 0.24, 0.10, 2.00, -1.00],
-        "Valor actual": [61, 2700, 1.85, gap, divergencia, 2.10, -0.70]
-    })
-    st.dataframe(df_tp_ext, use_container_width=True)
-
-# ====================
-# SL TRAILING
-# ====================
-with st.expander("🛡 Condiciones SL Trailing"):
-    df_trail = pd.DataFrame({
-        "Condición": ["Avance ≥ 2.0 pt", "RSI > 55", "Volumen > 2000"],
-        "Valor límite": [2.0, 55, 2000],
-        "Valor actual": [2.20, 58, 2600]
-    })
-    st.dataframe(df_trail, use_container_width=True)
-
-# ====================
-# BOTÓN RECALCULAR
-# ====================
-st.markdown("---")
-st.button("🔄 Forzar actualización de datos")
 
 
 
