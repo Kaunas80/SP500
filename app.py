@@ -49,23 +49,25 @@ st.markdown("""
         .green { color: green; font-weight: bold; }
         .red { color: red; font-weight: bold; }
         .section-title { font-size: 20px; font-weight: bold; margin-top: 1em; border-bottom: 2px solid #000; padding-bottom: 0.3em; }
+        input[type=number] {
+            text-align: right;
+        }
     </style>
 """, unsafe_allow_html=True)
 
 st.markdown('<div class="section-title">Datos Iniciales</div>', unsafe_allow_html=True)
 
-col1, col2 = st.columns([1, 1])
-
+# Entrada manual en línea
+col1, col2 = st.columns(2)
 with col1:
     spot_cierre = st.number_input("Spot cierre", value=547.0, step=0.1)
-
 with col2:
     futuro = st.number_input("Futuro (ES1!)", value=546.5, step=0.1)
 
-# Cálculo automático del Spot apertura desde las 15 acciones principales
+# Cálculo automático del Spot apertura
 spot_apertura = sum(precios_preapertura[ticker] * pesos[ticker] for ticker in precios_preapertura)
 
-# 🔒 Conversión segura a escalares
+# Convertir a escalares por si acaso
 if isinstance(spot_cierre, pd.Series):
     spot_cierre = spot_cierre.item()
 if isinstance(spot_apertura, pd.Series):
@@ -78,25 +80,27 @@ spot_cierre *= 10
 spot_apertura *= 10
 futuro *= 10
 
-# Cálculo gap y divergencia
+# Cálculos
 gap = spot_apertura - spot_cierre
 divergencia = futuro - spot_apertura
+gap_pct = (gap / spot_apertura) * 100
+div_pct = (divergencia / spot_apertura) * 100
 
 # Colores
 gap_color = "green" if gap > 0 else "red"
 div_color = "green" if (gap > 0 and divergencia > 0) or (gap < 0 and divergencia < 0) else "red"
 
-# Visualización tipo tabla
-def show_row(label, value, color_class=""):
+# Visualización
+def show_row(label, value, extra="", color_class=""):
     st.markdown(
         f'<div class="data-row"><div class="data-label">{label}</div>'
-        f'<div class="data-value {color_class}">{value:.2f}</div></div>',
+        f'<div class="data-value {color_class}">{value:.2f} {extra}</div></div>',
         unsafe_allow_html=True
     )
 
 show_row("Spot apertura (calculado)", spot_apertura)
-show_row("Gap Spot", gap, gap_color)
-show_row("Divergencia", divergencia, div_color)
+show_row("Gap Spot", gap, f"/ {gap_pct:.2f}%", gap_color)
+show_row("Divergencia", divergencia, f"/ {div_pct:.2f}%", div_color)
 
 st.button("Recalcular")
 
