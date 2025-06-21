@@ -57,7 +57,6 @@ st.markdown("""
 
 st.markdown('<div class="section-title">Datos Iniciales</div>', unsafe_allow_html=True)
 
-# Entrada manual en línea
 col1, col2 = st.columns(2)
 with col1:
     spot_cierre = st.number_input("Spot cierre", value=547.0, step=0.1)
@@ -67,7 +66,7 @@ with col2:
 # Cálculo automático del Spot apertura
 spot_apertura = sum(precios_preapertura[ticker] * pesos[ticker] for ticker in precios_preapertura)
 
-# Convertir a escalares por si acaso
+# Asegurar escalares
 if isinstance(spot_cierre, pd.Series):
     spot_cierre = spot_cierre.item()
 if isinstance(spot_apertura, pd.Series):
@@ -86,9 +85,14 @@ divergencia = futuro - spot_apertura
 gap_pct = (gap / spot_apertura) * 100
 div_pct = (divergencia / spot_apertura) * 100
 
-# Colores
-gap_color = "green" if gap > 0 else "red"
-div_color = "green" if (gap > 0 and divergencia > 0) or (gap < 0 and divergencia < 0) else "red"
+# Dirección del gap (↑ o ↓)
+gap_arrow = "↑" if gap > 0 else "↓"
+
+# Color corregido para divergencia (verde si aún no se ha descontado)
+if (gap > 0 and divergencia < 0) or (gap < 0 and divergencia > 0):
+    div_color = "green"
+else:
+    div_color = "red"
 
 # Visualización
 def show_row(label, value, extra="", color_class=""):
@@ -99,7 +103,7 @@ def show_row(label, value, extra="", color_class=""):
     )
 
 show_row("Spot apertura (calculado)", spot_apertura)
-show_row("Gap Spot", gap, f"/ {gap_pct:.2f}%", gap_color)
+show_row("Gap Spot", gap, f"{gap_arrow} / {gap_pct:.2f}%")
 show_row("Divergencia", divergencia, f"/ {div_pct:.2f}%", div_color)
 
 st.button("Recalcular")
