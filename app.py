@@ -1,42 +1,14 @@
 import streamlit as st
 import pandas as pd
+import yfinance as yf
 
-# Precios de preapertura (temporales)
-precios_preapertura = {
-    'AAPL': 210.5,
-    'MSFT': 445.8,
-    'AMZN': 132.4,
-    'NVDA': 122.3,
-    'GOOGL': 165.1,
-    'META': 123.7,
-    'TSLA': 190.2,
-    'BRK.B': 361.3,
-    'UNH': 518.4,
-    'JPM': 198.5,
-    'JNJ': 156.4,
-    'V': 270.3,
-    'XOM': 112.9,
-    'PG': 166.8,
-    'MA': 437.2
-}
-
-pesos = {
-    'AAPL': 0.072,
-    'MSFT': 0.069,
-    'AMZN': 0.052,
-    'NVDA': 0.045,
-    'GOOGL': 0.035,
-    'META': 0.031,
-    'TSLA': 0.030,
-    'BRK.B': 0.025,
-    'UNH': 0.022,
-    'JPM': 0.021,
-    'JNJ': 0.020,
-    'V': 0.019,
-    'XOM': 0.018,
-    'PG': 0.018,
-    'MA': 0.017
-}
+# Obtener datos del SPY automáticamente
+spy = yf.Ticker("SPY")
+hist = spy.history(period="2d")
+spot_cierre = hist['Close'].iloc[-2] * 10  # Escala real
+spot_apertura = spy.info.get("preMarketPrice", None)
+if spot_apertura:
+    spot_apertura *= 10  # Escala real
 
 st.set_page_config(layout="wide")
 
@@ -57,76 +29,69 @@ st.markdown("""
 
 st.markdown('<div class="section-title">Datos Iniciales</div>', unsafe_allow_html=True)
 
-col1, col2 = st.columns(2)
-with col1:
-    spot_cierre = st.number_input("Spot cierre", value=5942.8, step=0.1)
-with col2:
-    futuro = st.number_input("Futuro (ES1!)", value=5983.8, step=0.1)
+# Valor manual para Futuro
+futuro = st.number_input("Futuro (ES1!)", value=5980.0, step=0.1)
 
-# Cálculo automático del Spot apertura (viene en escala SPY → multiplicamos x10)
-spot_apertura = sum(precios_preapertura[ticker] * pesos[ticker] for ticker in precios_preapertura)
-spot_apertura *= 10  # Solo este valor se ajusta
+# Cálculo de gap y divergencia solo si spot_apertura está disponible
+if spot_apertura:
+    gap = spot_apertura - spot_cierre
+    divergencia = futuro - spot_apertura
+    gap_pct = (gap / spot_apertura) * 100
+    div_pct = (divergencia / spot_apertura) * 100
+    gap_arrow = "↑" if gap > 0 else "↓"
 
-# Cálculo de gap y divergencia
-gap = spot_apertura - spot_cierre
-divergencia = futuro - spot_apertura
-gap_pct = (gap / spot_apertura) * 100
-div_pct = (divergencia / spot_apertura) * 100
+    # Lógica de divergencia
+    if (gap > 0 and divergencia < 0) or (gap < 0 and divergencia > 0):
+        div_color = "green"
+    else:
+        div_color = "red"
 
-# Flecha de dirección
-gap_arrow = "↑" if gap > 0 else "↓"
+    # Mostrar datos
+    def show_row(label, value, extra="", color_class=""):
+        st.markdown(
+            f'<div class="data-row"><div class="data-label">{label}</div>'
+            f'<div class="data-value {color_class}">{value:.2f} {extra}</div></div>',
+            unsafe_allow_html=True
+        )
 
-# Lógica corregida de divergencia (verde si aún no se ha descontado)
-if (gap > 0 and divergencia < 0) or (gap < 0 and divergencia > 0):
-    div_color = "green"
-else:
-    div_color = "red"
+    show_row("Spot cierre (automático)", spot_cierre)
+    show_row("Spot apertura (pre-market)", spot_apertura)
+    show_row("Gap Spot", gap, f"{gap_arrow} / {gap_pct:.2f}%")
+    show_row("Divergencia", divergencia, f"/ {div_pct:.2f}%", div_color)
 
-# Visualización tipo tabla
-def show_row(label, value, extra="", color_class=""):
-    st.markdown(
-        f'<div class="data-row"><div class="data-label">{label}</div>'
-        f'<div class="data-value {color_class}">{value:.2f} {extra}</div></div>',
-        unsafe_allow_html=True
-    )
+    st.button("Recalcular")
 
-show_row("Spot apertura (calculado)", spot_apertura)
-show_row("Gap Spot", gap, f"{gap_arrow} / {gap_pct:.2f}%")
-show_row("Divergencia", divergencia, f"/ {div_pct:.2f}%", div_color)
+    # Entrada recomendada
+    st.markdown('<div class="section-title">Entrada recomendada</div>', unsafe_allow_html=True)
 
-st.button("Recalcular")
+    if gap > 0 and divergencia > 0:
+        st.markdown('<div class="data-row"><div class="data-label">Tipo</div>'
+                    '<div class="data-value green">Largo ↑</div></div>', unsafe_allow_html=True)
+        entrada = spot_apertura
+        tp = entrada + 30
+        sl = entrada - 15
 
-# Entrada recomendada
-st.markdown('<div class="section-title">Entrada recomendada</div>', unsafe_allow_html=True)
+    elif gap < 0 and divergencia < 0:
+        st.markdown('<div class="data-row"><div class="data-label">Tipo</div>'
+                    '<div class="data-value red">Corto ↓</div></div>', unsafe_allow_html=True)
+        entrada = spot_apertura
+        tp = entrada - 30
+        sl = entrada + 15
 
-if gap > 0 and divergencia > 0:
-    st.markdown('<div class="data-row"><div class="data-label">Tipo</div>'
-                '<div class="data-value green">Largo ↑</div></div>', unsafe_allow_html=True)
-    entrada = spot_apertura
-    tp = entrada + 30
-    sl = entrada - 15
+    else:
+        entrada = tp = sl = None
+        st.markdown('<div class="data-row"><div class="data-label">Tipo</div>'
+                    '<div class="data-value">Sin entrada</div></div>', unsafe_allow_html=True)
 
-elif gap < 0 and divergencia < 0:
-    st.markdown('<div class="data-row"><div class="data-label">Tipo</div>'
-                '<div class="data-value red">Corto ↓</div></div>', unsafe_allow_html=True)
-    entrada = spot_apertura
-    tp = entrada - 30
-    sl = entrada + 15
+    if entrada:
+        show_row("Entrada", entrada)
+        show_row("TP", tp)
+        show_row("SL", sl)
 
-else:
-    entrada = tp = sl = None
-    st.markdown('<div class="data-row"><div class="data-label">Tipo</div>'
-                '<div class="data-value">Sin entrada</div></div>', unsafe_allow_html=True)
-
-if entrada:
-    show_row("Entrada", entrada)
-    show_row("TP", tp)
-    show_row("SL", sl)
-
-    with st.expander("Validación entrada en tendencia (1min)"):
-        show_row("RSI > 55", 60)
-        show_row("Impulso > 0", 1.3)
-        show_row("Volumen > 100%", 122)
+        with st.expander("Validación entrada en tendencia (1min)"):
+            show_row("RSI > 55", 60)
+            show_row("Impulso > 0", 1.3)
+            show_row("Volumen > 100%", 122)
 
         with st.expander("Condiciones TP Extendido"):
             show_row("Retroceso < 40%", 32)
@@ -135,3 +100,5 @@ if entrada:
         with st.expander("Condiciones SL Trailing"):
             show_row("Velocidad > 0.5", 0.76)
             show_row("RSI se mantiene > 55", 61)
+else:
+    st.error("❌ No se pudo obtener el precio de preapertura del SPY.")
