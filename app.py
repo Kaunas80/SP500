@@ -1,73 +1,98 @@
 import streamlit as st
 import yfinance as yf
-from datetime import datetime
 
 st.set_page_config(page_title="Estrategia SP500", layout="centered")
 
+# === ESTILO PERSONALIZADO ===
 st.markdown("""
-    <style>
-        .data-row {
-            display: flex;
-            justify-content: space-between;
-            border-bottom: 1px solid #eee;
-            padding: 6px 0;
-        }
-        .data-label {
-            flex: 1;
-            text-align: right;
-            font-weight: bold;
-            padding-right: 10px;
-        }
-        .data-value {
-            flex: 1;
-            text-align: right;
-        }
-    </style>
+<style>
+    .datos-grid {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        row-gap: 0.5rem;
+        column-gap: 1rem;
+        align-items: center;
+        font-family: sans-serif;
+    }
+    .label {
+        text-align: right;
+        font-weight: 500;
+    }
+    .valor {
+        text-align: right;
+    }
+    .valor-destacado {
+        text-align: right;
+        font-weight: bold;
+    }
+    .positivo {
+        color: green;
+        font-weight: bold;
+    }
+    .negativo {
+        color: red;
+        font-weight: bold;
+    }
+</style>
 """, unsafe_allow_html=True)
 
 st.markdown("## Datos Iniciales")
 
-# Obtener datos de SPY
-def obtener_datos_spy():
-    try:
-        spy = yf.Ticker("SPY")
-        df = spy.history(period="2d")
-        cierre = df["Close"].iloc[-2] * 10
-        preapertura = spy.info.get("preMarketPrice", None)
-        if preapertura is not None:
-            preapertura *= 10
-        return round(cierre, 2), round(preapertura, 2) if preapertura else None
-    except:
-        return None, None
+# === DATOS AUTOMÁTICOS DEL SPY ===
+try:
+    spy = yf.Ticker("SPY")
+    hist = spy.history(period="2d")
+    spot_cierre = hist["Close"].iloc[-2] * 10
+    spot_apertura = hist["Open"].iloc[-1] * 10
+    spot_error = False
+except:
+    spot_cierre = None
+    spot_apertura = None
+    spot_error = True
 
-spot_cierre, spot_apertura = obtener_datos_spy()
+# === ENTRADA MANUAL EN CASO DE ERROR ===
+manual_spot_apertura = False
+if spot_error:
+    st.warning("⚠️ No se pudo obtener automáticamente el precio del SPY. Introduce los datos manualmente.")
+    spot_cierre = st.number_input("Spot cierre (manual)", value=0.0, step=0.1, format="%.2f")
+    spot_apertura = st.number_input("Spot apertura (manual)", value=0.0, step=0.1, format="%.2f")
+    manual_spot_apertura = True
 
-# Entrada manual si falla lectura automática
-if spot_cierre is None:
-    spot_cierre = st.number_input("Spot cierre", value=0.0, step=1.0, format="%.2f")
-if spot_apertura is None:
-    spot_apertura = st.number_input("Spot apertura", value=0.0, step=1.0, format="%.2f")
+# === FUTURO ES1! ===
+futuro = st.number_input("Futuro (ES1!)", value=5980.0, step=0.5, format="%.2f")
 
-# Futuro siempre manual
-futuro = st.number_input("Futuro (ES1!)", value=5980.00, step=1.0, format="%.2f")
+# === CÁLCULOS ===
+gap = spot_apertura - spot_cierre
+gap_pct = (gap / spot_cierre * 100) if spot_cierre else 0
+divergencia = futuro - spot_apertura
+divergencia_pct = (divergencia / abs(gap) * 100) if gap else 0
 
-# Cálculos
-if spot_cierre and spot_apertura:
-    gap = round(spot_apertura - spot_cierre, 2)
-    gap_pct = round((gap / spot_cierre) * 100, 2)
-    gap_flecha = "↑" if gap > 0 else "↓"
-    gap_texto = f"{gap:,.2f} {gap_flecha} / {abs(gap_pct):.2f}%"
+# === ESTILO GAP Y DIVERGENCIA ===
+gap_flecha = "↑" if gap > 0 else "↓"
+gap_color = "negativo" if gap < 0 else "positivo"
+div_color = "positivo" if (
+    (gap > 0 and futuro < spot_apertura) or (gap < 0 and futuro > spot_apertura)
+) else "negativo"
 
-    divergencia = round(futuro - spot_apertura, 2)
-    divergencia_pct = round((divergencia / abs(gap)) * 100, 2) if gap != 0 else 0
-    diver_color = "green" if (gap > 0 and divergencia < 0) or (gap < 0 and divergencia < 0) else "red"
-    diver_texto = f"<span style='color:{diver_color}; font-weight:bold'>{divergencia:,.2f} / {abs(divergencia_pct):.2f}%</span>"
+# === PRESENTACIÓN DE DATOS ===
+st.markdown("<div class='datos-grid'>", unsafe_allow_html=True)
 
-    # Mostrar bloque alineado como tabla
-    st.markdown(f"""
-        <div class="data-row"><div class="data-label">Spot cierre</div><div class="data-value">{spot_cierre:,.2f}</div></div>
-        <div class="data-row"><div class="data-label">Spot apertura</div><div class="data-value">{spot_apertura:,.2f}</div></div>
-        <div class="data-row"><div class="data-label">Futuro (ES1!)</div><div class="data-value">{futuro:,.2f}</div></div>
-        <div class="data-row"><div class="data-label">Gap Spot</div><div class="data-value">{gap_texto}</div></div>
-        <div class="data-row"><div class="data-label">Divergencia</div><div class="data-value">{diver_texto}</div></div>
-    """, unsafe_allow_html=True)
+st.markdown("<div class='label'>Spot cierre</div>", unsafe_allow_html=True)
+st.markdown(f"<div class='valor-destacado'>{spot_cierre:,.2f}</div>", unsafe_allow_html=True)
+
+st.markdown("<div class='label'>Spot apertura</div>", unsafe_allow_html=True)
+st.markdown(f"<div class='valor-destacado'>{spot_apertura:,.2f}</div>", unsafe_allow_html=True)
+
+st.markdown("<div class='label'>Gap Spot</div>", unsafe_allow_html=True)
+st.markdown(
+    f"<div class='{gap_color}'>{gap:,.2f} {gap_flecha} / {abs(gap_pct):.2f}%</div>",
+    unsafe_allow_html=True
+)
+
+st.markdown("<div class='label'>Divergencia</div>", unsafe_allow_html=True)
+st.markdown(
+    f"<div class='{div_color}'>{divergencia:,.2f} / {abs(divergencia_pct):.2f}%</div>",
+    unsafe_allow_html=True
+)
+
+st.markdown("</div>", unsafe_allow_html=True)
