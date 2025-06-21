@@ -1,101 +1,53 @@
 import streamlit as st
 import yfinance as yf
+from datetime import datetime, timedelta
 
-st.set_page_config(layout="centered", page_title="Estrategia SP500")
+st.set_page_config(page_title="Estrategia SP500", layout="centered")
+st.markdown("## Datos Iniciales")
 
-st.markdown(
-    """
-    <style>
-        body { background-color: white; color: black; }
-        .block-container {
-            padding-top: 2rem;
-            padding-bottom: 2rem;
-        }
-        div[data-testid="stNumberInput"] input {
-            text-align: right;
-        }
-        div[data-testid="metric-container"] {
-            text-align: right;
-        }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
-st.title("Datos Iniciales")
-
-# Función para obtener el valor de cierre anterior del SPY
-def obtener_cierre_spy():
+# --- Obtener datos de SPY ---
+def obtener_datos_spy():
     try:
+        hoy = datetime.today()
         spy = yf.Ticker("SPY")
-        hist = spy.history(period="2d")
-        return round(hist["Close"].iloc[-1] * 10, 2)
-    except Exception:
-        return None
+        df = spy.history(period="2d")
+        cierre = df["Close"].iloc[-2] * 10  # Día anterior
+        preapertura = df["Close"].iloc[-1] * 10  # Último valor disponible
+        return round(cierre, 2), round(preapertura, 2)
+    except:
+        return None, None
 
-# Función para obtener el valor de preapertura del SPY
-def obtener_preapertura_spy():
-    try:
-        spy = yf.Ticker("SPY")
-        premarket = spy.info.get("preMarketPrice")
-        if premarket:
-            return round(premarket * 10, 2)
-    except Exception:
-        return None
+spot_cierre, spot_apertura = obtener_datos_spy()
 
-# Obtener valores automáticos
-spot_cierre = obtener_cierre_spy()
-spot_apertura = obtener_preapertura_spy()
+# --- Mostrar entradas manuales si falla la lectura automática ---
+if spot_cierre is None or spot_apertura is None:
+    st.error("❌ No se pudo obtener automáticamente el precio de preapertura del SPY.")
+    spot_cierre = st.number_input("Spot cierre", value=0.0, step=1.0, format="%.2f")
+    spot_apertura = st.number_input("Spot apertura (manual)", value=0.0, step=1.0, format="%.2f")
+else:
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown(f"<div style='text-align: right;'>Spot cierre</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='text-align: right; font-weight: bold;'>{spot_cierre:,.2f}</div>", unsafe_allow_html=True)
+    with col2:
+        st.markdown(f"<div style='text-align: right;'>Spot apertura</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='text-align: right; font-weight: bold;'>{spot_apertura:,.2f}</div>", unsafe_allow_html=True)
 
-# Mostrar valores o entrada manual si falla la lectura
-col1, col2, col3 = st.columns([1, 1, 1])
+# --- Entrada manual del Futuro ---
+futuro = st.number_input("Futuro (ES1!)", value=5980.00, step=1.0, format="%.2f")
 
-with col1:
-    if spot_cierre:
-        st.markdown("**Spot cierre**")
-        st.write(f"{spot_cierre:,.2f}")
-    else:
-        spot_cierre = st.number_input("Spot cierre", format="%.2f")
-
-with col2:
-    if spot_apertura:
-        st.markdown("**Spot apertura**")
-        st.write(f"{spot_apertura:,.2f}")
-    else:
-        spot_apertura = st.number_input("Spot apertura (manual)", format="%.2f")
-
-with col3:
-    futuro = st.number_input("Futuro (ES1!)", format="%.2f", value=5980.00)
-
-# Si los valores están disponibles, hacer cálculos
+# --- Cálculo GAP y Divergencia ---
 if spot_cierre and spot_apertura:
-    spot_cierre = float(spot_cierre)
-    spot_apertura = float(spot_apertura)
-    gap = spot_apertura - spot_cierre
-    gap_pct = (gap / spot_apertura) * 100 if spot_apertura else 0
+    gap = round(spot_apertura - spot_cierre, 2)
+    gap_pct = round((gap / spot_cierre) * 100, 2)
+    gap_signo = "↑" if gap > 0 else "↓"
+    gap_texto = f"{gap:,.2f} {gap_signo} / {abs(gap_pct):.2f}%"
 
-    divergencia = futuro - spot_apertura
-    divergencia_pct = (divergencia / abs(gap)) * 100 if gap != 0 else 0
+    divergencia = round(futuro - spot_apertura, 2)
+    divergencia_pct = round((divergencia / abs(gap)) * 100, 2) if gap != 0 else 0
+    divergencia_color = "green" if (gap > 0 and divergencia < 0) or (gap < 0 and divergencia > 0) else "red"
+    divergencia_texto = f"<span style='color:{divergencia_color}; font-weight:bold'>{divergencia:,.2f} / {abs(divergencia_pct):.2f}%</span>"
 
-    # Dirección del gap
-    flecha = "↑" if gap > 0 else "↓"
-    gap_str = f"{gap:,.2f} {flecha} / {gap_pct:.2f}%"
-
-    # Color para divergencia
-    gap_alcista = gap > 0
-    diver_verde = (gap_alcista and divergencia < 0) or (not gap_alcista and divergencia > 0)
-    color_div = "green" if diver_verde else "red"
-    diver_str = f"<span style='color:{color_div}'>{divergencia:,.2f} / {divergencia_pct:.2f}%</span>"
-
-    # Mostrar resultados
     st.markdown("---")
-    st.markdown("**Spot apertura (calculado)**")
-    st.write(f"{spot_apertura:,.2f}")
-
-    st.markdown("**Gap Spot**")
-    st.write(gap_str)
-
-    st.markdown("**Divergencia**", unsafe_allow_html=True)
-    st.markdown(diver_str, unsafe_allow_html=True)
-
-    st.button("Recalcular")
+    st.markdown(f"<div style='text-align: right;'>Gap Spot</div><div style='text-align: right; font-weight: bold;'>{gap_texto}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='text-align: right;'>Divergencia</div><div style='text-align: right;'>{divergencia_texto}</div>", unsafe_allow_html=True)
