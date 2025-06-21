@@ -66,7 +66,7 @@ with col2:
 # Cálculo automático del Spot apertura
 spot_apertura = sum(precios_preapertura[ticker] * pesos[ticker] for ticker in precios_preapertura)
 
-# Asegurar escalares
+# Asegurar escalares y multiplicar ×10
 if isinstance(spot_cierre, pd.Series):
     spot_cierre = spot_cierre.item()
 if isinstance(spot_apertura, pd.Series):
@@ -74,10 +74,9 @@ if isinstance(spot_apertura, pd.Series):
 if isinstance(futuro, pd.Series):
     futuro = futuro.item()
 
-# Multiplicación ×10
-spot_cierre *= 10
-spot_apertura *= 10
-futuro *= 10
+spot_cierre = float(spot_cierre) * 10
+spot_apertura = float(spot_apertura) * 10
+futuro = float(futuro) * 10
 
 # Cálculos
 gap = spot_apertura - spot_cierre
@@ -88,7 +87,7 @@ div_pct = (divergencia / spot_apertura) * 100
 # Dirección del gap (↑ o ↓)
 gap_arrow = "↑" if gap > 0 else "↓"
 
-# Color corregido para divergencia (verde si aún no se ha descontado)
+# Color corregido para divergencia
 if (gap > 0 and divergencia < 0) or (gap < 0 and divergencia > 0):
     div_color = "green"
 else:
