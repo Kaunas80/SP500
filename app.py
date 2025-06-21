@@ -1,98 +1,55 @@
 import streamlit as st
 import yfinance as yf
+from datetime import datetime, timedelta
 
 st.set_page_config(page_title="Estrategia SP500", layout="centered")
 
-# === ESTILO PERSONALIZADO ===
-st.markdown("""
-<style>
-    .datos-grid {
-        display: grid;
-        grid-template-columns: 1fr auto;
-        row-gap: 0.5rem;
-        column-gap: 1rem;
-        align-items: center;
-        font-family: sans-serif;
-    }
-    .label {
-        text-align: right;
-        font-weight: 500;
-    }
-    .valor {
-        text-align: right;
-    }
-    .valor-destacado {
-        text-align: right;
-        font-weight: bold;
-    }
-    .positivo {
-        color: green;
-        font-weight: bold;
-    }
-    .negativo {
-        color: red;
-        font-weight: bold;
-    }
-</style>
-""", unsafe_allow_html=True)
+st.markdown("<h2 style='margin-bottom: 1rem;'>Datos Iniciales</h2>", unsafe_allow_html=True)
 
-st.markdown("## Datos Iniciales")
+# --- Obtener datos SPY automáticamente ---
+def obtener_datos_spy():
+    try:
+        hoy = datetime.today()
+        ayer = hoy - timedelta(days=1)
+        datos = yf.download("SPY", start=ayer.strftime('%Y-%m-%d'), end=hoy.strftime('%Y-%m-%d'), progress=False)
 
-# === DATOS AUTOMÁTICOS DEL SPY ===
-try:
-    spy = yf.Ticker("SPY")
-    hist = spy.history(period="2d")
-    spot_cierre = hist["Close"].iloc[-2] * 10
-    spot_apertura = hist["Open"].iloc[-1] * 10
-    spot_error = False
-except:
-    spot_cierre = None
-    spot_apertura = None
-    spot_error = True
+        cierre = datos["Close"][-1] * 10
+        premarket = yf.Ticker("SPY").info["preMarketPrice"] * 10
+        return round(cierre, 2), round(premarket, 2)
+    except:
+        return None, None
 
-# === ENTRADA MANUAL EN CASO DE ERROR ===
-manual_spot_apertura = False
-if spot_error:
-    st.warning("⚠️ No se pudo obtener automáticamente el precio del SPY. Introduce los datos manualmente.")
-    spot_cierre = st.number_input("Spot cierre (manual)", value=0.0, step=0.1, format="%.2f")
-    spot_apertura = st.number_input("Spot apertura (manual)", value=0.0, step=0.1, format="%.2f")
-    manual_spot_apertura = True
+spot_cierre, spot_apertura = obtener_datos_spy()
 
-# === FUTURO ES1! ===
-futuro = st.number_input("Futuro (ES1!)", value=5980.0, step=0.5, format="%.2f")
+# --- Entrada manual si falla conexión ---
+if spot_cierre is None or spot_apertura is None:
+    st.error("❌ No se pudo obtener el precio de preapertura del SPY.")
+    spot_cierre = st.number_input("Spot cierre (manual)", value=0.0, format="%.2f", key="cierre_manual")
+    spot_apertura = st.number_input("Spot apertura (manual)", value=0.0, format="%.2f", key="apertura_manual")
 
-# === CÁLCULOS ===
-gap = spot_apertura - spot_cierre
-gap_pct = (gap / spot_cierre * 100) if spot_cierre else 0
-divergencia = futuro - spot_apertura
-divergencia_pct = (divergencia / abs(gap) * 100) if gap else 0
+# --- Entrada de Futuro ---
+futuro = st.number_input("Futuro (ES1!)", value=5980.00, format="%.2f")
 
-# === ESTILO GAP Y DIVERGENCIA ===
-gap_flecha = "↑" if gap > 0 else "↓"
-gap_color = "negativo" if gap < 0 else "positivo"
-div_color = "positivo" if (
-    (gap > 0 and futuro < spot_apertura) or (gap < 0 and futuro > spot_apertura)
-) else "negativo"
+# --- Cálculo de GAP y Divergencia ---
+gap_valor = spot_apertura - spot_cierre
+gap_pct = (gap_valor / spot_cierre) * 100 if spot_cierre else 0
+flecha = "↑" if gap_valor > 0 else "↓"
 
-# === PRESENTACIÓN DE DATOS ===
-st.markdown("<div class='datos-grid'>", unsafe_allow_html=True)
+div_valor = futuro - spot_apertura
+div_pct = (abs(div_valor) / abs(gap_valor)) * 100 if gap_valor != 0 else 0
+div_color = "green" if (gap_valor > 0 and div_valor < 0) or (gap_valor < 0 and div_valor > 0) else "red"
 
-st.markdown("<div class='label'>Spot cierre</div>", unsafe_allow_html=True)
-st.markdown(f"<div class='valor-destacado'>{spot_cierre:,.2f}</div>", unsafe_allow_html=True)
+# --- Mostrar datos alineados ---
+def fila(nombre, valor):
+    st.markdown(f"<div style='display: flex; justify-content: space-between;'>"
+                f"<span>{nombre}</span><span><b>{valor}</b></span></div>", unsafe_allow_html=True)
 
-st.markdown("<div class='label'>Spot apertura</div>", unsafe_allow_html=True)
-st.markdown(f"<div class='valor-destacado'>{spot_apertura:,.2f}</div>", unsafe_allow_html=True)
-
-st.markdown("<div class='label'>Gap Spot</div>", unsafe_allow_html=True)
+fila("Spot cierre", f"{spot_cierre:,.2f}")
+fila("Spot apertura", f"{spot_apertura:,.2f}")
+fila("Gap Spot", f"{gap_valor:,.2f} {flecha} / {abs(gap_pct):.2f}%")
 st.markdown(
-    f"<div class='{gap_color}'>{gap:,.2f} {gap_flecha} / {abs(gap_pct):.2f}%</div>",
-    unsafe_allow_html=True
+    f"<div style='display: flex; justify-content: space-between;'>"
+    f"<span>Divergencia</span><span style='color:{div_color}; font-weight:bold;'>{div_valor:,.2f} / {abs(div_pct):.2f}%</span>"
+    f"</div>", unsafe_allow_html=True
 )
 
-st.markdown("<div class='label'>Divergencia</div>", unsafe_allow_html=True)
-st.markdown(
-    f"<div class='{div_color}'>{divergencia:,.2f} / {abs(divergencia_pct):.2f}%</div>",
-    unsafe_allow_html=True
-)
-
-st.markdown("</div>", unsafe_allow_html=True)
