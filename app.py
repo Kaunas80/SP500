@@ -1,118 +1,101 @@
 import streamlit as st
-import pandas as pd
 import yfinance as yf
 
-st.set_page_config(layout="wide")
+st.set_page_config(layout="centered", page_title="Estrategia SP500")
 
-# =====================
-# Función para obtener valores
-# =====================
-def obtener_valores_spy():
-    spy = yf.Ticker("SPY")
-    try:
-        cierre = spy.history(period="2d")['Close'].iloc[-2] * 10
-    except:
-        cierre = None
-    try:
-        apertura = spy.info.get("preMarketPrice", None)
-        if apertura:
-            apertura *= 10
-    except:
-        apertura = None
-    return cierre, apertura
-
-# =====================
-# Obtener valores
-# =====================
-spot_cierre, spot_apertura = obtener_valores_spy()
-
-# =====================
-# Interfaz visual
-# =====================
-st.markdown("""
+st.markdown(
+    """
     <style>
         body { background-color: white; color: black; }
-        .data-row { display: flex; justify-content: space-between; padding: 0.3em 0; border-bottom: 1px solid #eee; }
-        .data-label { font-weight: bold; width: 50%; text-align: left; }
-        .data-value { width: 50%; text-align: right; }
-        .green { color: green; font-weight: bold; }
-        .red { color: red; font-weight: bold; }
-        .section-title { font-size: 20px; font-weight: bold; margin-top: 1em; border-bottom: 2px solid #000; padding-bottom: 0.3em; }
+        .block-container {
+            padding-top: 2rem;
+            padding-bottom: 2rem;
+        }
+        div[data-testid="stNumberInput"] input {
+            text-align: right;
+        }
+        div[data-testid="metric-container"] {
+            text-align: right;
+        }
     </style>
-""", unsafe_allow_html=True)
+    """,
+    unsafe_allow_html=True
+)
 
-st.markdown('<div class="section-title">Datos Iniciales</div>', unsafe_allow_html=True)
+st.title("Datos Iniciales")
 
-# =====================
-# Entradas manuales en caso de error
-# =====================
-if spot_cierre is None:
-    spot_cierre = st.number_input("Spot cierre (manual)", value=0.0, step=0.1)
-else:
-    st.markdown(f'<div class="data-row"><div class="data-label">Spot cierre</div><div class="data-value">{spot_cierre:.2f}</div></div>', unsafe_allow_html=True)
+# Función para obtener el valor de cierre anterior del SPY
+def obtener_cierre_spy():
+    try:
+        spy = yf.Ticker("SPY")
+        hist = spy.history(period="2d")
+        return round(hist["Close"].iloc[-1] * 10, 2)
+    except Exception:
+        return None
 
-if spot_apertura is None:
-    spot_apertura = st.number_input("Spot apertura (manual)", value=0.0, step=0.1)
-else:
-    st.markdown(f'<div class="data-row"><div class="data-label">Spot apertura</div><div class="data-value">{spot_apertura:.2f}</div></div>', unsafe_allow_html=True)
+# Función para obtener el valor de preapertura del SPY
+def obtener_preapertura_spy():
+    try:
+        spy = yf.Ticker("SPY")
+        premarket = spy.info.get("preMarketPrice")
+        if premarket:
+            return round(premarket * 10, 2)
+    except Exception:
+        return None
 
-# =====================
-# Entrada manual: Futuro
-# =====================
-futuro = st.number_input("Futuro (ES1!)", value=5980.0, step=0.1)
+# Obtener valores automáticos
+spot_cierre = obtener_cierre_spy()
+spot_apertura = obtener_preapertura_spy()
 
-# =====================
-# Cálculos si todo está disponible
-# =====================
+# Mostrar valores o entrada manual si falla la lectura
+col1, col2, col3 = st.columns([1, 1, 1])
+
+with col1:
+    if spot_cierre:
+        st.markdown("**Spot cierre**")
+        st.write(f"{spot_cierre:,.2f}")
+    else:
+        spot_cierre = st.number_input("Spot cierre", format="%.2f")
+
+with col2:
+    if spot_apertura:
+        st.markdown("**Spot apertura**")
+        st.write(f"{spot_apertura:,.2f}")
+    else:
+        spot_apertura = st.number_input("Spot apertura (manual)", format="%.2f")
+
+with col3:
+    futuro = st.number_input("Futuro (ES1!)", format="%.2f", value=5980.00)
+
+# Si los valores están disponibles, hacer cálculos
 if spot_cierre and spot_apertura:
+    spot_cierre = float(spot_cierre)
+    spot_apertura = float(spot_apertura)
     gap = spot_apertura - spot_cierre
-    gap_pct = (gap / spot_apertura) * 100
-    gap_arrow = "↑" if gap > 0 else "↓"
+    gap_pct = (gap / spot_apertura) * 100 if spot_apertura else 0
 
     divergencia = futuro - spot_apertura
-    div_pct = (divergencia / abs(gap)) * 100 if gap != 0 else 0
-    div_color = "green" if (gap > 0 and divergencia < 0) or (gap < 0 and divergencia > 0) else "red"
+    divergencia_pct = (divergencia / abs(gap)) * 100 if gap != 0 else 0
 
-    # Mostrar valores
-    st.markdown(f'<div class="data-row"><div class="data-label">Spot apertura (calculado)</div><div class="data-value">{spot_apertura:.2f}</div></div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="data-row"><div class="data-label">Gap Spot</div><div class="data-value">{gap:.2f} {gap_arrow} / {gap_pct:.2f}%</div></div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="data-row"><div class="data-label">Divergencia</div><div class="data-value {div_color}">{divergencia:.2f} / {div_pct:.2f}%</div></div>', unsafe_allow_html=True)
+    # Dirección del gap
+    flecha = "↑" if gap > 0 else "↓"
+    gap_str = f"{gap:,.2f} {flecha} / {gap_pct:.2f}%"
+
+    # Color para divergencia
+    gap_alcista = gap > 0
+    diver_verde = (gap_alcista and divergencia < 0) or (not gap_alcista and divergencia > 0)
+    color_div = "green" if diver_verde else "red"
+    diver_str = f"<span style='color:{color_div}'>{divergencia:,.2f} / {divergencia_pct:.2f}%</span>"
+
+    # Mostrar resultados
+    st.markdown("---")
+    st.markdown("**Spot apertura (calculado)**")
+    st.write(f"{spot_apertura:,.2f}")
+
+    st.markdown("**Gap Spot**")
+    st.write(gap_str)
+
+    st.markdown("**Divergencia**", unsafe_allow_html=True)
+    st.markdown(diver_str, unsafe_allow_html=True)
 
     st.button("Recalcular")
-
-    # =====================
-    # Entrada recomendada
-    # =====================
-    st.markdown('<div class="section-title">Entrada recomendada</div>', unsafe_allow_html=True)
-
-    if gap > 0 and divergencia > 0:
-        st.markdown('<div class="data-row"><div class="data-label">Tipo</div><div class="data-value green">Largo ↑</div></div>', unsafe_allow_html=True)
-        entrada = spot_apertura
-        tp = entrada + 30
-        sl = entrada - 15
-    elif gap < 0 and divergencia < 0:
-        st.markdown('<div class="data-row"><div class="data-label">Tipo</div><div class="data-value red">Corto ↓</div></div>', unsafe_allow_html=True)
-        entrada = spot_apertura
-        tp = entrada - 30
-        sl = entrada + 15
-    else:
-        st.markdown('<div class="data-row"><div class="data-label">Tipo</div><div class="data-value">Sin entrada</div></div>', unsafe_allow_html=True)
-        entrada = tp = sl = None
-
-    if entrada:
-        st.markdown(f'<div class="data-row"><div class="data-label">Entrada</div><div class="data-value">{entrada:.2f}</div></div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="data-row"><div class="data-label">TP</div><div class="data-value">{tp:.2f}</div></div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="data-row"><div class="data-label">SL</div><div class="data-value">{sl:.2f}</div></div>', unsafe_allow_html=True)
-
-        with st.expander("Validación entrada en tendencia (1min)"):
-            st.markdown('<div class="data-row"><div class="data-label">RSI > 55</div><div class="data-value">60</div></div>', unsafe_allow_html=True)
-            st.markdown('<div class="data-row"><div class="data-label">Impulso > 0</div><div class="data-value">1.3</div></div>', unsafe_allow_html=True)
-            st.markdown('<div class="data-row"><div class="data-label">Volumen > 100%</div><div class="data-value">122</div></div>', unsafe_allow_html=True)
-
-        with st.expander("Condiciones TP Extendido"):
-            st.markdown('<div class="data-row"><div class="data-label">Retroceso < 40%</div><div class="data-value">32</div></div>', unsafe_allow_html=True)
-            st.markdown('<div class="data-row"><div class="data-label">Volatilidad > 1.0</div><div class="data-value">1.18</div></div>', unsafe_allow_html=True)
-
-        with st.expander("Condiciones SL Trailing"):
-            st.markdown('<div class="data-row"><div class="data-label">Velocidad > 0.5</div><div class="data-value">0.76</div></div>', unsafe_allow_html=True)
-            st.markdown('<div class="data-row"><div class="data-label">RSI se mantiene > 55</div><div class="data-value">61</div></div>', unsafe_allow_html=True)
