@@ -1,134 +1,141 @@
 import streamlit as st
 import pandas as pd
-import yfinance as yf
-from datetime import datetime, timedelta
 
-st.set_page_config(page_title="Estrategia SP500", layout="centered", page_icon="📈")
+# Precios de preapertura (temporales)
+precios_preapertura = {
+    'AAPL': 210.5,
+    'MSFT': 445.8,
+    'AMZN': 132.4,
+    'NVDA': 122.3,
+    'GOOGL': 165.1,
+    'META': 123.7,
+    'TSLA': 190.2,
+    'BRK.B': 361.3,
+    'UNH': 518.4,
+    'JPM': 198.5,
+    'JNJ': 156.4,
+    'V': 270.3,
+    'XOM': 112.9,
+    'PG': 166.8,
+    'MA': 437.2
+}
 
-st.markdown(
-    """
+pesos = {
+    'AAPL': 0.072,
+    'MSFT': 0.069,
+    'AMZN': 0.052,
+    'NVDA': 0.045,
+    'GOOGL': 0.035,
+    'META': 0.031,
+    'TSLA': 0.030,
+    'BRK.B': 0.025,
+    'UNH': 0.022,
+    'JPM': 0.021,
+    'JNJ': 0.020,
+    'V': 0.019,
+    'XOM': 0.018,
+    'PG': 0.018,
+    'MA': 0.017
+}
+
+st.set_page_config(layout="wide")
+
+st.markdown("""
     <style>
-        body {
-            background-color: white;
-            color: black;
-        }
-        .stButton > button {
-            background-color: #0066ff;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            font-weight: bold;
-            margin-top: 10px;
-        }
-        .stButton > button:hover {
-            background-color: #0051cc;
-        }
-        .metric-container {
-            font-weight: bold;
-        }
-        .verde {
-            color: green;
-        }
-        .rojo {
-            color: red;
-        }
-        .alineado-derecha {
-            text-align: right !important;
-        }
+        body { background-color: white; color: black; }
+        .data-row { display: flex; justify-content: space-between; padding: 0.3em 0; border-bottom: 1px solid #eee; }
+        .data-label { font-weight: bold; width: 50%; text-align: left; }
+        .data-value { width: 50%; text-align: right; }
+        .green { color: green; font-weight: bold; }
+        .red { color: red; font-weight: bold; }
+        .section-title { font-size: 20px; font-weight: bold; margin-top: 1em; border-bottom: 2px solid #000; padding-bottom: 0.3em; }
     </style>
-    """,
-    unsafe_allow_html=True
-)
+""", unsafe_allow_html=True)
 
-st.markdown("## Datos Iniciales")
+st.markdown('<div class="section-title">Datos Iniciales</div>', unsafe_allow_html=True)
 
-# =====================
-# DATOS INICIALES
-# =====================
-hoy = datetime.now()
-ayer = hoy - timedelta(days=1)
-datos_spy = yf.download('SPY', start=ayer, end=hoy, interval='1d')
+col1, col2 = st.columns([1, 1])
 
-spot_cierre = round(datos_spy['Close'].iloc[-1] * 10, 2)
-spot_apertura = round(datos_spy['Open'].iloc[-1] * 10, 2)
-valor_defecto_futuro = float(spot_apertura)
-
-col1, col2, col3 = st.columns(3)
 with col1:
-    st.write("Spot cierre")
-    st.write(f"<p class='alineado-derecha'>{spot_cierre}</p>", unsafe_allow_html=True)
+    spot_cierre = st.number_input("Spot cierre", value=547.0, step=0.1)
+
 with col2:
-    st.write("Spot apertura")
-    st.write(f"<p class='alineado-derecha'>{spot_apertura}</p>", unsafe_allow_html=True)
-with col3:
-    futuro = st.number_input("Futuro (ES1!)", value=valor_defecto_futuro, step=0.25)
+    futuro = st.number_input("Futuro (ES1!)", value=546.5, step=0.1)
 
-# Cálculo GAP y DIVERGENCIA
-gap = round((spot_apertura - spot_cierre), 2)
-gap_pct = round((gap / spot_cierre) * 100, 2)
+# Cálculo automático del Spot apertura desde las 15 acciones principales
+spot_apertura = sum(precios_preapertura[ticker] * pesos[ticker] for ticker in precios_preapertura)
 
-divergencia = round((futuro - spot_apertura), 2)
-div_pct = round((divergencia / spot_apertura) * 100, 2)
+# 🔒 Conversión segura a escalares
+if isinstance(spot_cierre, pd.Series):
+    spot_cierre = spot_cierre.item()
+if isinstance(spot_apertura, pd.Series):
+    spot_apertura = spot_apertura.item()
+if isinstance(futuro, pd.Series):
+    futuro = futuro.item()
 
-gap_color = "verde" if gap > 0 else "rojo"
-div_color = "verde" if (gap > 0 and futuro > spot_apertura) or (gap < 0 and futuro < spot_apertura) else "rojo"
+# Multiplicación ×10
+spot_cierre *= 10
+spot_apertura *= 10
+futuro *= 10
 
-st.markdown(f"**Gap Spot:** <span class='{gap_color}'>+{gap} pt ({gap_pct}%)</span>" if gap > 0 else f"**Gap Spot:** <span class='{gap_color}'>{gap} pt ({gap_pct}%)</span>", unsafe_allow_html=True)
-st.markdown(f"**Divergencia:** <span class='{div_color}'>+{divergencia} pt ({div_pct}%)</span>" if divergencia > 0 else f"**Divergencia:** <span class='{div_color}'>{divergencia} pt ({div_pct}%)</span>", unsafe_allow_html=True)
+# Cálculo gap y divergencia
+gap = spot_apertura - spot_cierre
+divergencia = futuro - spot_apertura
 
-st.button("Recalcular", type="primary")
+# Colores
+gap_color = "green" if gap > 0 else "red"
+div_color = "green" if (gap > 0 and divergencia > 0) or (gap < 0 and divergencia < 0) else "red"
 
-# =====================
-# ENTRADA RECOMENDADA
-# =====================
-st.markdown("## Entrada recomendada")
+# Visualización tipo tabla
+def show_row(label, value, color_class=""):
+    st.markdown(
+        f'<div class="data-row"><div class="data-label">{label}</div>'
+        f'<div class="data-value {color_class}">{value:.2f}</div></div>',
+        unsafe_allow_html=True
+    )
 
-entrada = round((spot_apertura + futuro) / 2, 2)
-tp = round(entrada + 5, 2)
-sl = round(entrada - 5, 2)
+show_row("Spot apertura (calculado)", spot_apertura)
+show_row("Gap Spot", gap, gap_color)
+show_row("Divergencia", divergencia, div_color)
 
-tipo_entrada = "largo" if futuro > spot_apertura else "corto"
-color_entrada = "verde" if tipo_entrada == "largo" else "rojo"
-flecha = "⬆️" if tipo_entrada == "largo" else "⬇️"
-texto = "Entrada en largo" if tipo_entrada == "largo" else "Entrada en corto"
+st.button("Recalcular")
 
-st.markdown(f"<h4 class='{color_entrada}'>{flecha} {texto}</h4>", unsafe_allow_html=True)
-st.write(f"TP: {tp}")
-st.write(f"SL: {sl}")
+# Entrada recomendada
+st.markdown('<div class="section-title">Entrada recomendada</div>', unsafe_allow_html=True)
 
-# =====================
-# VALIDACIÓN EN TENDENCIA
-# =====================
-with st.expander("Validación entrada en tendencia (1min)"):
-    rsi = 61
-    volumen = 2700
-    cuerpo_vela = 1.85
-    impulso = 2.2
-    retroceso = -0.8
+if gap > 0 and divergencia > 0:
+    st.markdown('<div class="data-row"><div class="data-label">Tipo</div>'
+                '<div class="data-value green">Largo ↑</div></div>', unsafe_allow_html=True)
+    entrada = spot_apertura
+    tp = entrada + 30
+    sl = entrada - 15
 
-    data = {
-        "Condición": ["RSI ≥ 55", "Volumen ≥ 2000", "Cuerpo vela ≥ 1.25 pt", "Impulso ≥ 2.0 pt", "Retroceso ≤ -1.0 pt"],
-        "Valor actual": [rsi, volumen, cuerpo_vela, impulso, retroceso]
-    }
-    df = pd.DataFrame(data)
-    st.dataframe(df, use_container_width=True)
+elif gap < 0 and divergencia < 0:
+    st.markdown('<div class="data-row"><div class="data-label">Tipo</div>'
+                '<div class="data-value red">Corto ↓</div></div>', unsafe_allow_html=True)
+    entrada = spot_apertura
+    tp = entrada - 30
+    sl = entrada + 15
 
-# =====================
-# TP EXTENDIDO
-# =====================
-with st.expander("Condiciones TP extendido"):
-    st.write("Impulso ≥ 2 pt")
-    st.write("Retroceso ≤ -0.5 pt")
-    st.write("Volumen ≥ 2500")
-    st.write(f"<p class='alineado-derecha'>({impulso})</p>", unsafe_allow_html=True)
-    st.write(f"<p class='alineado-derecha'>({retroceso})</p>", unsafe_allow_html=True)
-    st.write(f"<p class='alineado-derecha'>({volumen})</p>", unsafe_allow_html=True)
+else:
+    entrada = tp = sl = None
+    st.markdown('<div class="data-row"><div class="data-label">Tipo</div>'
+                '<div class="data-value">Sin entrada</div></div>', unsafe_allow_html=True)
 
-# =====================
-# SL TRAILING
-# =====================
-with st.expander("Condiciones SL Trailing"):
-    st.write("Diferencia desde entrada")
-    avance = round(abs(futuro - entrada), 2)
-    st.write(f"<p class='alineado-derecha'>{avance}</p>", unsafe_allow_html=True)
+if entrada:
+    show_row("Entrada", entrada)
+    show_row("TP", tp)
+    show_row("SL", sl)
 
+    with st.expander("Validación entrada en tendencia (1min)"):
+        show_row("RSI > 55", 60)
+        show_row("Impulso > 0", 1.3)
+        show_row("Volumen > 100%", 122)
+
+        with st.expander("Condiciones TP Extendido"):
+            show_row("Retroceso < 40%", 32)
+            show_row("Volatilidad > 1.0", 1.18)
+
+        with st.expander("Condiciones SL Trailing"):
+            show_row("Velocidad > 0.5", 0.76)
+            show_row("RSI se mantiene > 55", 61)
