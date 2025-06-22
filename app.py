@@ -1,118 +1,132 @@
+from datetime import datetime, timedelta
+import yfinance as yf
 import streamlit as st
 
+st.set_page_config(layout="wide")
+
 # --- BLOQUE 1: DATOS INICIALES ---
+
 st.markdown("## Datos Iniciales")
 
-col1, col2 = st.columns([1, 1])
+# Leer datos desde yfinance con respaldo manual
+spy = yf.Ticker("SPY")
+hist = spy.history(period="7d")
+
+spot_cierre = None
+spot_apertura = None
+error_lectura = False
+
+try:
+    spot_cierre = round(hist["Close"][-2] * 10, 2)
+    spot_apertura = round(hist["Open"][-1] * 10, 2)
+except:
+    error_lectura = True
+
+col1, col2 = st.columns([2, 2])
 with col1:
-    spot_cierre = st.number_input("Spot cierre", value=0.0, format="%.2f", step=0.25)
+    spot_cierre = st.number_input("Spot cierre", value=spot_cierre if spot_cierre else 0.0, step=0.25)
 with col2:
-    spot_apertura = st.number_input("Spot apertura", value=0.0, format="%.2f", step=0.25)
+    spot_apertura = st.number_input("Spot apertura", value=spot_apertura if spot_apertura else 0.0, step=0.25)
 
-futuro = st.number_input("Futuro (ES1!)", value=0.0, format="%.2f", step=0.25)
+# Entrada manual del valor del Futuro (ES1!)
+futuro = st.number_input("Futuro (ES1!)", value=0.0, step=0.25)
 
-# Gap Spot
-gap = spot_apertura - spot_cierre
-gap_pct = (gap / spot_cierre) * 100 if spot_cierre else 0
-gap_icon = "↑" if gap > 0 else "↓" if gap < 0 else "-"
-gap_color = "green" if gap != 0 else "lightgray"
+# Cálculo del Gap Spot
+gap_spot = spot_apertura - spot_cierre
+gap_pct = (gap_spot / spot_cierre) * 100 if spot_cierre != 0 else 0
 
-# Divergencia
-div_valor = spot_apertura - futuro
-div_pct = (div_valor / spot_apertura) * 100 if spot_apertura else 0
-
-# Color de divergencia: verde si el gap no se ha descontado, rojo si ya lo fue
-if spot_apertura > spot_cierre:
-    div_color = "green" if futuro < spot_apertura else "red"
-elif spot_apertura < spot_cierre:
-    div_color = "green" if futuro > spot_apertura else "red"
+if gap_spot > 0:
+    flecha_gap = "↑"
+elif gap_spot < 0:
+    flecha_gap = "↓"
 else:
-    div_color = "gray"
+    flecha_gap = "–"
 
-# Mensaje adicional si el gap ya fue descontado
-gap_descontado = (
-    (spot_apertura > spot_cierre and futuro >= spot_apertura) or
-    (spot_apertura < spot_cierre and futuro <= spot_apertura)
-)
+gap_color = "green" if gap_spot != 0 else "lightgray"
+gap_text = f"{gap_spot:.2f} {flecha_gap} / {gap_pct:.2f}%"
+st.markdown(f"<div style='display: flex; justify-content: space-between;'><span>Gap Spot</span><span style='color:{gap_color}'>{gap_text}</span></div>", unsafe_allow_html=True)
 
-# Visualización tipo tabla
-st.markdown(f"""
-<div style="display: grid; grid-template-columns: 1fr 1fr; font-size: 18px;">
-  <div style="text-align: left;">Spot cierre</div><div style="text-align: right;">{spot_cierre:,.2f}</div>
-  <div style="text-align: left;">Spot apertura</div><div style="text-align: right;">{spot_apertura:,.2f}</div>
-  <div style="text-align: left;">Gap Spot</div><div style="text-align: right; color:{gap_color};">{gap:,.2f} {gap_icon} / {abs(gap_pct):.2f}%</div>
-  <div style="text-align: left;">Divergencia</div><div style="text-align: right; color:{div_color};">{div_valor:,.2f} / {abs(div_pct):.2f}%</div>
-</div>
-""", unsafe_allow_html=True)
+# Cálculo de la Divergencia
+divergencia = spot_apertura - futuro
+divergencia_pct = (divergencia / spot_apertura) * 100 if spot_apertura != 0 else 0
 
+# Mostrar Divergencia
+div_color = "green" if (
+    (gap_spot > 0 and divergencia < 0) or (gap_spot < 0 and divergencia > 0)
+) else "red"
+
+div_text = f"{divergencia:.2f} / {divergencia_pct:.2f}%"
+st.markdown(f"<div style='display: flex; justify-content: space-between;'><span>Divergencia</span><span style='color:{div_color}'>{div_text}</span></div>", unsafe_allow_html=True)
+
+# Mostrar mensaje si el gap ya ha sido descontado
+gap_descontado = (gap_spot > 0 and divergencia > 0) or (gap_spot < 0 and divergencia < 0)
 if gap_descontado:
-    st.markdown("<div style='text-align:right; color:red; font-weight:bold'>Gap descontado</div>", unsafe_allow_html=True)
+    st.markdown("<div style='color:red'><b>⚠️ Gap descontado</b></div>", unsafe_allow_html=True)
 
+st.markdown("---")
 
 # --- BLOQUE 2: ENTRADA RECOMENDADA ---
+
 st.markdown("## Entrada recomendada")
 
-# Simulaciones técnicas (pueden automatizarse luego)
+# Parámetros simulados para validación
 rsi_valor = 61
-volumen_valor = 2100
-cuerpo_valor = 1.30
+rsi_limite = 55
+volumen_valor = 2300
+volumen_limite = 2000
+cuerpo_valor = 1.35
+cuerpo_limite = 1.25
 
-valida_rsi = rsi_valor > 55
-valida_volumen = volumen_valor > 2000
-valida_cuerpo = cuerpo_valor >= 1.25
-valida_div = abs(div_pct) >= 0.10
-gap_no_descontado = not gap_descontado
+# Evaluar dirección del gap
+tipo_entrada = "Largo" if divergencia < 0 else "Corto"
+entrada_icono = "⬆️" if tipo_entrada == "Largo" else "⬇️"
+entrada_color = "gray"
+entrada_texto = ""
+tp_sl = ""
+mostrar_validacion = False
 
-entrada_valida = all([valida_rsi, valida_volumen, valida_cuerpo, valida_div]) and gap_no_descontado
-
-if gap_no_descontado:
-    entrada_tipo = "Largo" if div_valor > 0 else "Corto"
-    icono = "⬆️" if entrada_tipo == "Largo" else "⬇️"
-
-    if abs(div_pct) >= 0.24:
-        entrada_color = "green" if entrada_tipo == "Largo" else "red"
-        tp = 10
-        sl = 3
-    else:
-        entrada_color = "orange"
-        tp = 4
-        sl = 3
+if gap_descontado:
+    entrada_color = "#D3D3D3"
+    entrada_texto = "⚠️ No hay entrada recomendada (gap ya descontado)"
 else:
-    entrada_tipo = "No hay entrada recomendada (gap ya descontado)"
-    icono = "⚠️"
-    entrada_color = "lightgray"
-    tp = None
-    sl = None
+    if abs(divergencia_pct) < 0.10:
+        entrada_color = "#D3D3D3"
+        entrada_texto = "🚧 No hay entrada recomendada (divergencia insuficiente)"
+    elif abs(divergencia_pct) < 0.24:
+        entrada_color = "#f5a623"  # Mostaza
+        entrada_texto = f"{entrada_icono} {tipo_entrada}"
+        tp_sl = "+4 / -3" if tipo_entrada == "Largo" else "-4 / +3"
+        mostrar_validacion = True
+    else:
+        entrada_color = "green" if tipo_entrada == "Largo" else "red"
+        entrada_texto = f"{entrada_icono} {tipo_entrada}"
+        tp_sl = "+10 / -3" if tipo_entrada == "Largo" else "-10 / +3"
+        mostrar_validacion = True
 
-# Mostrar entrada
 col1, col2 = st.columns([1, 3])
 with col1:
     st.write("**Entrada**")
 with col2:
-    st.markdown(f"<div style='text-align:right; color:{entrada_color}; font-weight:bold'>{icono} {entrada_tipo}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='text-align:right; color:{entrada_color}; font-weight:bold'>{entrada_texto}</div>", unsafe_allow_html=True)
 
-# TP/SL solo si hay entrada válida
-if entrada_valida:
+# Mostrar TP / SL si corresponde
+if tp_sl:
     col1, col2 = st.columns([1, 3])
     with col1:
         st.write("TP / SL")
     with col2:
-        st.markdown(f"<div style='text-align:right'>+{tp} / -{sl}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='text-align:right'>{tp_sl}</div>", unsafe_allow_html=True)
 
-# Validaciones
-with st.expander("Validación entrada en tendencia (1min)"):
-    def validar(nombre, limite, actual, cumple):
-        color = "green" if cumple else "red"
-        st.markdown(f"<div style='display:flex; justify-content:space-between;'><span>{nombre}</span><span style='color:{color}'>{actual}</span></div>", unsafe_allow_html=True)
+# Validaciones dentro del desplegable
+if mostrar_validacion:
+    with st.expander("Validación entrada en tendencia (1min)"):
+        def render_validacion(nombre, limite, actual):
+            color = "green" if actual >= limite else "red"
+            alineado = f"<div style='display: flex; justify-content: space-between;'><span>{nombre} ({limite})</span><span style='color:{color}'>{actual}</span></div>"
+            st.markdown(alineado, unsafe_allow_html=True)
 
-    validar("RSI (>55)", 55, rsi_valor, valida_rsi)
-    validar("Volumen (>2000)", 2000, volumen_valor, valida_volumen)
-    validar("Cuerpo vela (≥1.25)", 1.25, cuerpo_valor, valida_cuerpo)
-    validar("Divergencia (≥0.10%)", 0.10, round(abs(div_pct), 2), valida_div)
+        render_validacion("RSI", rsi_limite, rsi_valor)
+        render_validacion("Volumen", volumen_limite, volumen_valor)
+        render_validacion("Cuerpo vela", cuerpo_limite, cuerpo_valor)
 
-with st.expander("Condiciones SL Trailing"):
-    validar("Valor mínimo admisible", 5955, 5960, True)
-
-with st.expander("Condiciones TP Extendido"):
-    validar("Impulso mínimo", 0.30, 0.35, True)
-    validar("RSI mínimo", 55, rsi_valor, True)
+st.markdown("---")
