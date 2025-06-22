@@ -55,3 +55,60 @@ if spot_cierre and spot_apertura:
     fila("Spot apertura", f"{spot_apertura:,.2f}")
     fila("Gap Spot", gap_txt)
     fila("Divergencia", div_txt)
+
+# ----------------------------------------------
+# BLOQUE ENTRADA RECOMENDADA (a continuación)
+# ----------------------------------------------
+
+# Simulamos valores límite y valores actuales para validaciones
+rsi_valor = 61
+rsi_limite = 55
+
+volumen_valor = 1.8
+volumen_limite = 1.5
+
+impulso_valor = 0.35
+impulso_limite = 0.30
+
+trailing_valor = 5960
+trailing_limite = 5955
+
+# --- Estilo y Layout ---
+st.markdown("### Entrada recomendada")
+col1, col2 = st.columns([1, 3])
+
+# Entrada sugerida
+with col1:
+    st.write("**Entrada**")
+with col2:
+    entrada_tipo = "Largo"
+    entrada_color = "green" if entrada_tipo == "Largo" else "red"
+    entrada_icono = "⬆️" if entrada_tipo == "Largo" else "⬇️"
+    st.markdown(f"<div style='text-align:right; color:{entrada_color}; font-weight:bold'>{entrada_icono} {entrada_tipo}</div>", unsafe_allow_html=True)
+
+# TP y SL
+col1, col2 = st.columns([1, 3])
+with col1:
+    st.write("TP / SL")
+with col2:
+    st.markdown(f"<div style='text-align:right'>6000 / 5940</div>", unsafe_allow_html=True)
+
+# Validación en tendencia (desplegable)
+with st.expander("Validación entrada en tendencia (1min)"):
+    def render_validacion(nombre, limite, actual):
+        color = "green" if actual >= limite else "red"
+        alineado = f"<div style='display: flex; justify-content: space-between;'><span>{nombre} ({limite})</span><span style='color:{color}'>{actual}</span></div>"
+        st.markdown(alineado, unsafe_allow_html=True)
+
+    render_validacion("RSI", rsi_limite, rsi_valor)
+    render_validacion("Volumen", volumen_limite, volumen_valor)
+    render_validacion("Impulso", impulso_limite, impulso_valor)
+
+# Validación SL Trailing
+with st.expander("Condiciones SL Trailing"):
+    render_validacion("Valor mínimo admisible", trailing_limite, trailing_valor)
+
+# Validación TP Extendido
+with st.expander("Condiciones TP Extendido"):
+    render_validacion("Impulso mínimo", impulso_limite, impulso_valor)
+    render_validacion("RSI mínimo", rsi_limite, rsi_valor)
