@@ -1,15 +1,15 @@
 import streamlit as st
 
-# --- BLOQUE 1: DATOS INICIALES (VERSIÓN APROBADA) ---
+# --- BLOQUE 1: DATOS INICIALES (NO MODIFICAR) ---
 st.markdown("## Datos Iniciales")
 
 col1, col2 = st.columns([1, 1])
 with col1:
-    spot_cierre = st.number_input("Spot cierre", value=0.0, format="%.2f")
+    spot_cierre = st.number_input("Spot cierre", value=0.0, format="%.2f", step=0.25)
 with col2:
-    spot_apertura = st.number_input("Spot apertura", value=0.0, format="%.2f")
+    spot_apertura = st.number_input("Spot apertura", value=0.0, format="%.2f", step=0.25)
 
-futuro = st.number_input("Futuro (ES1!)", value=0.0, format="%.2f")
+futuro = st.number_input("Futuro (ES1!)", value=0.0, format="%.2f", step=0.25)
 
 # Cálculo del GAP
 gap = spot_apertura - spot_cierre
@@ -36,42 +36,54 @@ st.markdown(f"""
 # --- BLOQUE 2: ENTRADA RECOMENDADA ---
 st.markdown("## Entrada recomendada")
 
-# Simulación de valores técnicos (serán automáticos más adelante)
+# Simulación de valores técnicos
 rsi_valor = 61
 volumen_valor = 2100
 cuerpo_vela_valor = 1.30
 
-# Reglas de validación de tendencia
+# Validaciones
 valida_rsi = rsi_valor > 55
 valida_volumen = volumen_valor > 2000
 valida_cuerpo = cuerpo_vela_valor >= 1.25
 valida_div = abs(divergencia_pct) >= 0.10
 
-entrada_valida = valida_rsi and valida_volumen and valida_cuerpo and valida_div
+# GAP no descontado
+gap_no_descontado = (
+    (gap > 0 and divergencia > 0) or
+    (gap < 0 and divergencia < 0)
+)
 
-# Reglas de TP / SL
-div_extendida = abs(divergencia_pct) >= 0.24
-tp = 10 if div_extendida else 4
-sl = 3
+entrada_valida = all([valida_rsi, valida_volumen, valida_cuerpo, valida_div]) and gap_no_descontado
 
-# Tipo de entrada
-entrada_tipo = "Largo" if divergencia > 0 else "Corto"
-entrada_color = "green" if entrada_valida and div_extendida else ("orange" if entrada_valida else "gray")
-entrada_icono = "⬆️" if entrada_tipo == "Largo" else "⬇️"
+# Lógica de tipo de entrada
+if gap_no_descontado:
+    entrada_tipo = "Largo" if divergencia > 0 else "Corto"
+    div_extendida = abs(divergencia_pct) >= 0.24
+    tp = 10 if div_extendida else 4
+    sl = 3
+    entrada_color = "green" if div_extendida else "orange"
+    entrada_icono = "⬆️" if entrada_tipo == "Largo" else "⬇️"
+else:
+    entrada_tipo = "No hay entrada recomendada (gap ya descontado)"
+    entrada_color = "lightgray"
+    entrada_icono = "⚠️"
+    tp = None
+    sl = None
 
-# Entrada visual
+# Mostrar entrada
 col1, col2 = st.columns([1, 3])
 with col1:
     st.write("**Entrada**")
 with col2:
     st.markdown(f"<div style='text-align:right; color:{entrada_color}; font-weight:bold'>{entrada_icono} {entrada_tipo}</div>", unsafe_allow_html=True)
 
-# TP / SL
-col1, col2 = st.columns([1, 3])
-with col1:
-    st.write("TP / SL")
-with col2:
-    st.markdown(f"<div style='text-align:right'>+{tp} / -{sl}</div>", unsafe_allow_html=True)
+# Mostrar TP/SL solo si hay entrada válida
+if entrada_valida:
+    col1, col2 = st.columns([1, 3])
+    with col1:
+        st.write("TP / SL")
+    with col2:
+        st.markdown(f"<div style='text-align:right'>+{tp} / -{sl}</div>", unsafe_allow_html=True)
 
 # Validación entrada en tendencia
 with st.expander("Validación entrada en tendencia (1min)"):
