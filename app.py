@@ -58,67 +58,79 @@ st.markdown(f"""
 
 st.markdown("## Entrada recomendada")
 
-# Entrada sugerida (se determina en función del gap)
-entrada_tipo = "Largo" if gap > 0 else "Corto"
-entrada_color = "green" if entrada_tipo == "Largo" else "red"
-entrada_icono = "⬆️" if entrada_tipo == "Largo" else "⬇️"
+# Valores simulados
+rsi_valor = 61
+volumen_valor = 2100
+cuerpo_vela_valor = 1.35
+divergencia_pct_abs = abs(divergencia_pct)
 
+entrada_tipo = "Largo" if gap > 0 else "Corto"
+
+# Validación condiciones
+valida_rsi = (entrada_tipo == "Largo" and rsi_valor > 55) or (entrada_tipo == "Corto" and rsi_valor < 45)
+valida_volumen = volumen_valor > 2000
+valida_cuerpo = cuerpo_vela_valor >= 1.25
+valida_divergencia = (divergencia_pct > 10 and entrada_tipo == "Largo") or (divergencia_pct < -10 and entrada_tipo == "Corto")
+
+condiciones_base_ok = valida_rsi and valida_volumen and valida_cuerpo and valida_divergencia
+
+# Color y TP/SL
+if condiciones_base_ok:
+    if (divergencia_pct > 24 and entrada_tipo == "Largo") or (divergencia_pct < -24 and entrada_tipo == "Corto"):
+        color_recomendacion = "#2ecc71"  # Verde
+        tp = 10
+        sl = 3
+    else:
+        color_recomendacion = "#f1c40f"  # Mostaza
+        tp = 4
+        sl = 3
+else:
+    color_recomendacion = "grey"
+    tp = None
+    sl = None
+
+# Mostrar entrada
 col1, col2 = st.columns([1, 3])
 with col1:
     st.write("**Entrada**")
 with col2:
-    st.markdown(
-        f"<div style='text-align:right; color:{entrada_color}; font-weight:bold'>{entrada_icono} {entrada_tipo}</div>",
-        unsafe_allow_html=True)
+    if condiciones_base_ok:
+        icono = "⬆️" if entrada_tipo == "Largo" else "⬇️"
+        st.markdown(f"<div style='text-align:right; color:{color_recomendacion}; font-weight:bold'>{icono} {entrada_tipo}</div>", unsafe_allow_html=True)
+    else:
+        st.markdown("<div style='text-align:right; color:grey;'>Condiciones no cumplidas</div>", unsafe_allow_html=True)
 
-# TP y SL mostrados solo como puntos, con signo
-tp_puntos = 20
-sl_puntos = 20
-if entrada_tipo == "Largo":
-    tp_valor = f"+{tp_puntos}"
-    sl_valor = f"-{sl_puntos}"
-else:
-    tp_valor = f"-{tp_puntos}"
-    sl_valor = f"+{sl_puntos}"
-
+# TP/SL
 col1, col2 = st.columns([1, 3])
 with col1:
     st.write("TP / SL")
 with col2:
-    st.markdown(f"<div style='text-align:right'>{tp_valor} / {sl_valor}</div>", unsafe_allow_html=True)
+    if tp and sl:
+        tp_str = f"+{tp}" if entrada_tipo == "Largo" else f"-{tp}"
+        sl_str = f"-{sl}" if entrada_tipo == "Largo" else f"+{sl}"
+        st.markdown(f"<div style='text-align:right'>{tp_str} / {sl_str}</div>", unsafe_allow_html=True)
+    else:
+        st.markdown("<div style='text-align:right'>–</div>", unsafe_allow_html=True)
 
-# -------- Validaciones --------
-
-# Valores simulados
-rsi_valor = 61
-rsi_limite = 55
-
-volumen_valor = 1.8
-volumen_limite = 1.5
-
-impulso_valor = 0.35
-impulso_limite = 0.30
-
-trailing_valor = 5960
-trailing_limite = 5955
-
-# Función para validación
-def render_validacion(nombre, limite, actual):
-    color = "green" if actual >= limite else "red"
-    alineado = f"<div style='display: flex; justify-content: space-between;'><span>{nombre} ({limite})</span><span style='color:{color}'>{actual}</span></div>"
-    st.markdown(alineado, unsafe_allow_html=True)
-
-# Bloque desplegable: Validación en tendencia
+# Validaciones
 with st.expander("Validación entrada en tendencia (1min)"):
-    render_validacion("RSI", rsi_limite, rsi_valor)
-    render_validacion("Volumen", volumen_limite, volumen_valor)
-    render_validacion("Impulso", impulso_limite, impulso_valor)
+    def render_validacion(nombre, limite, actual, operador=">="):
+        if operador == ">=":
+            ok = actual >= limite
+        elif operador == "<":
+            ok = actual < limite
+        else:
+            ok = False
+        color = "green" if ok else "red"
+        st.markdown(f"<div style='display:flex; justify-content:space-between;'><span>{nombre} ({limite})</span><span style='color:{color}'>{actual}</span></div>", unsafe_allow_html=True)
 
-# Bloque desplegable: SL Trailing
+    render_validacion("RSI", 55 if entrada_tipo == "Largo" else 45, rsi_valor, ">" if entrada_tipo == "Largo" else "<")
+    render_validacion("Volumen", 2000, volumen_valor)
+    render_validacion("Cuerpo vela", 1.25, cuerpo_vela_valor)
+    render_validacion("Divergencia %", "10%", abs(divergencia_pct), ">")
+
 with st.expander("Condiciones SL Trailing"):
-    render_validacion("Valor mínimo admisible", trailing_limite, trailing_valor)
+    render_validacion("--", 0, 0)
 
-# Bloque desplegable: TP Extendido
 with st.expander("Condiciones TP Extendido"):
-    render_validacion("Impulso mínimo", impulso_limite, impulso_valor)
-    render_validacion("RSI mínimo", rsi_limite, rsi_valor)
+    render_validacion("--", 0, 0)
