@@ -1,105 +1,123 @@
 import streamlit as st
-import yfinance as yf
 
-# Configuración de estilo
-st.set_page_config(page_title="Estrategia SP500", layout="wide")
-
-st.markdown(
-    """
-    <style>
-    .valor-derecha {
-        display: flex;
-        justify-content: space-between;
-        margin-bottom: 0.25rem;
-    }
-    .valor-derecha span:first-child {
-        font-weight: bold;
-    }
-    .valor-derecha span:last-child {
-        text-align: right;
-        min-width: 100px;
-    }
-    .verde {color: green;}
-    .rojo {color: red;}
-    .gris {color: lightgray;}
-    .mostaza {color: #e6ac00;}
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
-st.title("Datos Iniciales")
-
-col1, col2 = st.columns(2)
-with col1:
-    spot_cierre = st.number_input("Spot cierre", value=5956.79, step=0.25, format="%.2f")
-with col2:
-    spot_apertura = st.number_input("Spot apertura", value=5983.80, step=0.25, format="%.2f")
-
-futuro = st.number_input("Futuro (ES1!)", value=0.0, step=0.25, format="%.2f")
-
-# Cálculos
+# Simulación de valores de entrada
+spot_cierre = 5956.79
+spot_apertura = 5983.80
+futuro = 5970.00
 gap = spot_apertura - spot_cierre
-gap_pct = (gap / spot_cierre) * 100 if spot_cierre else 0
-divergencia = (futuro - spot_apertura) / spot_apertura if spot_apertura else 0
-divergencia_pct = divergencia * 100
+gap_pct = (gap / spot_cierre) * 100
+divergencia = futuro - spot_apertura
+div_pct = (divergencia / spot_apertura) * 100
 
-# Lógica visual
-flecha = "↑" if gap > 0 else "↓" if gap < 0 else ""
-color_gap = "verde" if gap != 0 else "gris"
-color_div = "verde" if (gap > 0 and divergencia < 0) or (gap < 0 and divergencia > 0) else "rojo"
+# Simulación de condiciones
+rsi = 61
+volumen = 2100
+cuerpo_vela = 1.3
 
-# Mostrar valores
+# Evaluación
+entrada = None
+tipo_entrada = None
+tp = None
+sl = None
+mensaje_rechazo = ""
+
+# Determinar dirección del gap y divergencia
+gap_positivo = gap > 0
+div_positiva = divergencia > 0
+gap_no_descontado = (gap_positivo and not div_positiva) or (not gap_positivo and div_positiva)
+
+# Determinar entrada
+if gap != 0:
+    if gap_no_descontado:
+        if abs(div_pct) >= 0.10:
+            tipo_entrada = "Largo" if div_positiva else "Corto"
+            entrada = True
+            tp = 10 if abs(div_pct) >= 0.24 else 4
+            sl = 3
+        else:
+            mensaje_rechazo = "No hay entrada recomendada (divergencia insuficiente)"
+    else:
+        mensaje_rechazo = "No hay entrada recomendada (gap ya descontado)"
+else:
+    mensaje_rechazo = "No hay entrada recomendada (gap nulo)"
+
+# Estilo
+st.markdown("""
+<style>
+.valor-derecha {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    font-size: 18px;
+}
+.valor-derecha span:first-child {
+    font-weight: bold;
+}
+.verde {
+    color: green;
+    font-size: 20px;
+}
+.rojo {
+    color: red;
+    font-size: 20px;
+}
+.gris {
+    color: lightgray;
+    font-size: 18px;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# Bloque: Datos Iniciales
+st.markdown("## Datos Iniciales")
+
 st.markdown(f"""
 <div class="valor-derecha"><span>Spot cierre</span><span>{spot_cierre:,.2f}</span></div>
 <div class="valor-derecha"><span>Spot apertura</span><span>{spot_apertura:,.2f}</span></div>
-<div class="valor-derecha"><span>Gap Spot</span><span class="{color_gap}">{gap:+.2f} {flecha} / {gap_pct:.2f}%</span></div>
+<div class="valor-derecha">
+    <span>Gap Spot</span>
+    <span style="color:{'green' if gap != 0 else 'lightgray'}">
+        {gap:+.2f} {'↑' if gap > 0 else '↓' if gap < 0 else ''} / {abs(gap_pct):.2f}%
+    </span>
+</div>
+<div class="valor-derecha">
+    <span>Divergencia</span>
+    <span style="color:{'green' if gap_no_descontado else 'red'}">
+        {divergencia:+.2f} / {abs(div_pct):.2f}%
+    </span>
+</div>
 """, unsafe_allow_html=True)
 
-# Divergencia visual o mensaje si ya se descontó
-if (gap > 0 and divergencia > 0) or (gap < 0 and divergencia < 0):
-    st.markdown(f"""
-    <div class="valor-derecha"><span>Divergencia</span><span class="rojo">⚠️ Gap descontado</span></div>
-    """, unsafe_allow_html=True)
-    entrada_valida = False
-else:
-    st.markdown(f"""
-    <div class="valor-derecha"><span>Divergencia</span><span class="{color_div}">{spot_apertura:,.2f} / {divergencia_pct:.2f}%</span></div>
-    """, unsafe_allow_html=True)
-    entrada_valida = True
+# Mostrar mensaje si el gap está descontado
+if not gap_no_descontado:
+    st.markdown('<span class="rojo">⚠️ <b>Gap descontado</b></span>', unsafe_allow_html=True)
 
 st.markdown("---")
-st.header("Entrada recomendada")
 
-# Determinar tipo de entrada
-if entrada_valida and abs(divergencia_pct) >= 0.10:
-    tipo_entrada = "Largo" if divergencia < 0 else "Corto"
-    color_tipo = "verde" if tipo_entrada == "Largo" else "rojo"
-    flecha = "⬆" if tipo_entrada == "Largo" else "⬇"
-    
-    if abs(divergencia_pct) >= 0.24:
-        tp, sl = "+10", "-3"
-        color_entrada = "verde"
-    else:
-        tp, sl = "+4", "-3"
-        color_entrada = "mostaza"
+# Bloque: Entrada recomendada
+st.markdown("## Entrada recomendada")
 
-    st.markdown(f'<p class="{color_entrada}">{flecha} <b>{tipo_entrada}</b></p>', unsafe_allow_html=True)
-    st.markdown(f"**TP / SL**: {tp} / {sl}")
+if entrada:
+    color = "verde" if tipo_entrada == "Largo" else "rojo"
+    flecha = "⬆️" if tipo_entrada == "Largo" else "⬇️"
+    st.markdown(f"""
+    <div class="valor-derecha"><span>Entrada</span><span class="{color}">{flecha} <b>{tipo_entrada}</b></span></div>
+    <div class="valor-derecha"><span>TP / SL:</span><span class="{color}">+{tp} / -{sl}</span></div>
+    """, unsafe_allow_html=True)
 else:
-    mensaje = "⚠️ No hay entrada recomendada (gap ya descontado)" if not entrada_valida else "⚠️ No hay entrada recomendada (divergencia insuficiente)"
-    st.markdown(f'<p class="gris">{mensaje}</p>', unsafe_allow_html=True)
+    st.markdown(f"""
+    <div class="valor-derecha">
+        <span>Entrada</span>
+        <span class="gris">⚠️ <b>{mensaje_rechazo}</b></span>
+    </div>
+    """, unsafe_allow_html=True)
 
-# Validación (siempre visible)
+# Validación entrada en tendencia (1min)
 st.markdown("---")
 with st.expander("Validación entrada en tendencia (1min)", expanded=True):
-    rsi = 61
-    volumen = 2100
-    cuerpo_vela = 1.3
-
     st.markdown(f"""
-    <div class="valor-derecha"><span>RSI (&gt;55)</span><span class="verde">{rsi}</span></div>
-    <div class="valor-derecha"><span>Volumen (&gt;2000)</span><span class="verde">{volumen}</span></div>
-    <div class="valor-derecha"><span>Cuerpo vela (≥1.25)</span><span class="verde">{cuerpo_vela}</span></div>
-    <div class="valor-derecha"><span>Divergencia (≥0.10%)</span><span class="{ 'verde' if abs(divergencia_pct) >= 0.10 else 'rojo' }">{divergencia_pct:.2f}%</span></div>
+    <div class="valor-derecha"><span>RSI (&gt;55)</span><span style="color: {'green' if rsi > 55 else 'red'}">{rsi}</span></div>
+    <div class="valor-derecha"><span>Volumen (&gt;2000)</span><span style="color: {'green' if volumen > 2000 else 'red'}">{volumen}</span></div>
+    <div class="valor-derecha"><span>Cuerpo vela (≥1.25)</span><span style="color: {'green' if cuerpo_vela >= 1.25 else 'red'}">{cuerpo_vela}</span></div>
+    <div class="valor-derecha"><span>Divergencia (≥0.10%)</span><span style="color: {'green' if abs(div_pct) >= 0.10 else 'red'}">{abs(div_pct):.2f}%</span></div>
     """, unsafe_allow_html=True)
